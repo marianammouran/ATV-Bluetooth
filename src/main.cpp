@@ -38,7 +38,7 @@ void loop() {
 }
 
 */
-#include <Arduino.h>
+/*#include <Arduino.h>
 #include <BluetoothSerial.h>
 
 BluetoothSerial BT;
@@ -128,8 +128,80 @@ void loop() {
 }
 
 
+*/
+
+#include <Arduino.h>
+#include <BluetoothSerial.h>
+#include "DHT.h"
+
+#define DHTPIN 23       
+#define DHTTYPE DHT22  
+
+BluetoothSerial BT;
+DHT dht(DHTPIN, DHTTYPE);
 
 
+uint8_t enderecoSlave[] = {0xC0, 0x49, 0xEF, 0xBC, 0x02, 0x66};
+float tempC_ant = 0, hum_ant = 0;
 
+void setup() {
+  Serial.begin(9600);
+  delay(2000);
+  Serial.println("Iniciando DHT22...");
+  dht.begin();
 
+  if (!BT.begin("ESP32_Master", true)) {
+    Serial.println("Erro ao iniciar Bluetooth Master!");
+    while (true);
+  }
 
+  Serial.println(" Bluetooth Master iniciado");
+  Serial.print("Conectando ao Slave... ");
+  if (BT.connect(enderecoSlave)) {
+    Serial.println("Conectado ao Slave!");
+  } else {
+    Serial.println("Falha na conexão ao Slave!");
+  }
+
+  delay(2000);
+}
+
+void loop() {
+ 
+  float h = NAN, t = NAN;
+  for (int i = 0; i < 3; i++) {
+    h = dht.readHumidity();
+    t = dht.readTemperature();
+    if (!isnan(h) && !isnan(t)) break;
+    Serial.println(" Erro ao ler DHT22! Tentando novamente...");
+    delay(2000);
+  }
+
+  if (isnan(h) || isnan(t)) {
+    Serial.println(" Falha persistente no DHT22!");
+    delay(3000);
+    return;
+  }
+
+  float f = t * 1.8 + 32;
+
+  Serial.print(" Umidade: ");
+  Serial.print(h);
+  Serial.print("%   Temp: ");
+  Serial.print(t);
+  Serial.print("°C / ");
+  Serial.print(f);
+  Serial.println("°F");
+
+  
+  if (abs(t - tempC_ant) >= 0.5 || abs(h - hum_ant) >= 1.0) {
+    String msg = String(h, 1) + "," + String(t, 1) + "," + String(f, 1);
+    BT.println(msg);
+    Serial.println(" Enviado: " + msg);
+
+    tempC_ant = t;
+    hum_ant = h;
+  }
+
+  delay(3000);
+}
